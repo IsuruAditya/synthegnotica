@@ -3,9 +3,10 @@ import {
   Terminal, Code2, Component, Cpu, Layers, Copy, Check, Sparkles, Send,
   FileText, RefreshCw, HardDrive, Folder, Save, ChevronRight, BrainCircuit,
   FolderOpen, ArrowUp, Plus, X, Pencil, Trash2, FilePlus, RotateCcw,
-  StopCircle, Paperclip, MessageSquarePlus, Settings, ChevronDown
+  StopCircle, Paperclip, MessageSquarePlus, Settings, ChevronDown, Upload
 } from 'lucide-react';
 import { invoke } from '@tauri-apps/api/core';
+import MonacoEditor from '@monaco-editor/react';
 
 // ── Logo ──────────────────────────────────────────────────────────────────────
 function SynthegnoticaLogo({ size = 32 }) {
@@ -441,6 +442,38 @@ export default function App() {
     toast('Copied', 'success'); setTimeout(() => setCopiedFile(false), 2000);
   };
 
+  const [copiedMsgIdx, setCopiedMsgIdx] = useState(null);
+  const handleCopyMessage = (text, idx) => {
+    navigator.clipboard.writeText(text);
+    setCopiedMsgIdx(idx);
+    setTimeout(() => setCopiedMsgIdx(null), 2000);
+  };
+
+  // ── Drag & Drop ────────────────────────────────────────────────────────────
+  const [isDragOver, setIsDragOver] = useState(false);
+  const handleDragOver = (e) => { e.preventDefault(); setIsDragOver(true); };
+  const handleDragLeave = () => setIsDragOver(false);
+  const handleDrop = async (e) => {
+    e.preventDefault(); setIsDragOver(false);
+    const files = Array.from(e.dataTransfer.files);
+    if (!workspacePath) { toast('Set a workspace folder first', 'error'); return; }
+    for (const file of files) {
+      try {
+        const text = await file.text();
+        await invoke('save_file', { workspaceRoot: workspacePath, filePath: file.name, content: text });
+        toast(`Dropped: ${file.name}`, 'success');
+      } catch (err) { toast(`Failed to drop ${file.name}: ${err}`, 'error'); }
+    }
+    loadWorkspaceFiles(workspacePath);
+  };
+
+  // ── Monaco language detection ──────────────────────────────────────────────
+  const getMonacoLang = (filePath) => {
+    const ext = filePath?.split('.').pop()?.toLowerCase();
+    const map = { js: 'javascript', jsx: 'javascript', ts: 'typescript', tsx: 'typescript', py: 'python', rs: 'rust', css: 'css', html: 'html', json: 'json', md: 'markdown', toml: 'ini', yml: 'yaml', yaml: 'yaml', sh: 'shell', bash: 'shell', sql: 'sql', php: 'php', go: 'go', cpp: 'cpp', c: 'c', kt: 'kotlin', java: 'java', rb: 'ruby' };
+    return map[ext] || 'plaintext';
+  };
+
   const handleCopyComponent = (code, index) => {
     navigator.clipboard.writeText(code); setCopiedIndex(index);
     setTimeout(() => setCopiedIndex(null), 2000);
@@ -634,8 +667,15 @@ export default function App() {
 
               <div className="chat-history">
                 {messages.map((msg, i) => (
-                  <div key={i} className={`chat-bubble ${msg.sender}`}>
-                    {msg.sender === 'assistant' ? <ChatMessage text={msg.text} /> : <span style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</span>}
+                  <div key={i} className={`chat-bubble-wrap ${msg.sender}`}>
+                    <div className={`chat-bubble ${msg.sender}`}>
+                      {msg.sender === 'assistant' ? <ChatMessage text={msg.text} /> : <span style={{ whiteSpace: 'pre-wrap' }}>{msg.text}</span>}
+                    </div>
+                    {msg.text && (
+                      <button className="msg-copy-btn" onClick={() => handleCopyMessage(msg.text, i)} title="Copy message">
+                        {copiedMsgIdx === i ? <Check size={11} style={{ color: 'var(--color-success)' }} /> : <Copy size={11} />}
+                      </button>
+                    )}
                   </div>
                 ))}
                 {isGenerating && (
@@ -772,28 +812,57 @@ export default function App() {
                 )}
               </div>
 
-              <div className="editor-wrapper">
+              <div className="editor-wrapper" onDragOver={handleDragOver} onDragLeave={handleDragLeave} onDrop={handleDrop}>
                 <div className="editor-titlebar">
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
                     <span className="editor-filename">{activeFile || 'no file selected'}</span>
                     {isEditorDirty && <span className="editor-unsaved">● unsaved</span>}
                   </div>
-                  <div className="editor-dots">
-                    <span style={{ background: '#ef4444' }} />
-                    <span style={{ background: '#f59e0b' }} />
-                    <span style={{ background: '#10b981' }} />
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                    {isDragOver && <span style={{ fontSize: '11px', color: 'var(--color-secondary)' }}><Upload size={11} style={{ display: 'inline', verticalAlign: 'middle' }} /> Drop to import</span>}
+                    <div className="editor-dots">
+                      <span style={{ background: '#ef4444' }} />
+                      <span style={{ background: '#f59e0b' }} />
+                      <span style={{ background: '#10b981' }} />
+                    </div>
                   </div>
                 </div>
-                <textarea ref={editorRef} className="code-editor" value={activeFileContent}
-                  onChange={e => { if (!activeFile) return; setActiveFileContent(e.target.value); setIsEditorDirty(true); }}
-                  placeholder={activeFile ? '' : '// Select or create a file to start editing\n// Use the AI assistant to generate code →'}
-                  spellCheck={false} disabled={!activeFile} />
+                {isDragOver && <div className="drop-overlay"><Upload size={32} /><span>Drop files to import into workspace</span></div>}
+                {activeFile ? (
+                  <MonacoEditor
+                    height="100%"
+                    language={getMonacoLang(activeFile)}
+                    value={activeFileContent}
+                    theme="vs-dark"
+                    onChange={(val) => { setActiveFileContent(val ?? ''); setIsEditorDirty(true); }}
+                    options={{
+                      fontSize: 13,
+                      fontFamily: "'Fira Code', 'Cascadia Code', monospace",
+                      fontLigatures: true,
+                      minimap: { enabled: false },
+                      scrollBeyondLastLine: false,
+                      lineNumbers: 'on',
+                      renderLineHighlight: 'line',
+                      padding: { top: 12, bottom: 12 },
+                      smoothScrolling: true,
+                      cursorBlinking: 'smooth',
+                      bracketPairColorization: { enabled: true },
+                      automaticLayout: true,
+                    }}
+                  />
+                ) : (
+                  <div className="editor-empty">
+                    <Upload size={28} style={{ color: 'var(--color-text-muted)', marginBottom: '12px' }} />
+                    <p>Select or create a file to start editing</p>
+                    <p style={{ fontSize: '12px', marginTop: '6px' }}>Drag files here to import · Ask AI to generate code</p>
+                  </div>
+                )}
                 {activeFile && (
                   <div className="editor-statusbar">
                     <span>{activeFileContent.split('\n').length} lines</span>
                     <span>{activeFileContent.length} chars</span>
-                    <span>Ctrl+S · save</span>
-                    <span>Ctrl+N · new file</span>
+                    <span>{getMonacoLang(activeFile)}</span>
+                    <span style={{ marginLeft: 'auto' }}>Ctrl+S · save   Ctrl+N · new file</span>
                   </div>
                 )}
               </div>

@@ -1292,3 +1292,79 @@ h1,h2,h3,h4,h5,h6 {
   color: #e2e8f0;
   white-space: pre;
 }
+
+/* ── Chat bubble wrap + copy button ─────────────────────────────────────── */
+.chat-bubble-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: relative;
+}
+.chat-bubble-wrap.user { align-items: flex-end; }
+.chat-bubble-wrap.assistant { align-items: flex-start; }
+
+.msg-copy-btn {
+  background: rgba(255,255,255,0.04);
+  border: 1px solid var(--color-border);
+  border-radius: 4px;
+  cursor: pointer;
+  padding: 3px 6px;
+  color: var(--color-text-muted);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  transition: var(--t-fast);
+  opacity: 0;
+  pointer-events: none;
+}
+.chat-bubble-wrap:hover .msg-copy-btn {
+  opacity: 1;
+  pointer-events: all;
+}
+.msg-copy-btn:hover { background: rgba(255,255,255,0.08); color: var(--color-text-secondary); }
+
+/* ── Drop overlay ────────────────────────────────────────────────────────── */
+.editor-wrapper { position: relative; }
+
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(6,182,212,0.08);
+  border: 2px dashed rgba(6,182,212,0.5);
+  border-radius: var(--radius-sm);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--color-secondary);
+  font-size: 14px;
+  font-weight: 600;
+  z-index: 10;
+  pointer-events: none;
+}
+
+/* ── Editor empty state ──────────────────────────────────────────────────── */
+.editor-empty {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  color: var(--color-text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 32px;
+  gap: 4px;
+}
+
+/* ── Monaco editor container fix ─────────────────────────────────────────── */
+.editor-wrapper .monaco-editor {
+  flex: 1;
+}
+.editor-wrapper > section,
+.editor-wrapper > div:not(.editor-titlebar):not(.editor-statusbar):not(.drop-overlay):not(.editor-empty) {
+  flex: 1;
+  min-height: 0;
+}

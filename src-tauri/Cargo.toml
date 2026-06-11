@@ -1,6 +1,6 @@
 [package]
 name = "puteride"
-version = "0.1.1"
+version = "0.1.2"
 description = "Synthegnotica — AI-powered synthegnotic Open Source IDE"
 authors = ["you"]
 edition = "2021"

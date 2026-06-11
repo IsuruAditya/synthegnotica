@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
-## [0.1.1] — 2025-07-19
+## [0.1.2] — 2025-07-19
+
+### Added
+- Monaco Editor — full syntax highlighting, bracket colorization, font ligatures for all file types
+- Drag & drop files from Explorer into the editor to import them into the workspace instantly
+- Copy button per chat message (appears on hover)
+- README badges — CI, Release, License, Version, Tauri, Puter.js
+- Updated README with download link, full feature table, keyboard shortcuts
+
+---
 
 ### Fixed
 - Updated all Claude model IDs to match official Puter.js v2 API (sourced from developer.puter.com)
