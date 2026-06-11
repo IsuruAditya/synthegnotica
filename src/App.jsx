@@ -141,8 +141,9 @@ export default function App() {
   // ── AI state ───────────────────────────────────────────────────────────────
   const [chatInput, setChatInput] = useState('');
   const [isGenerating, setIsGenerating] = useState(false);
-  const [selectedModel, setSelectedModel] = useState('claude-sonnet-4-6');
+  const [selectedModel, setSelectedModel] = useState('claude-3-5-sonnet-20241022');
   const [puterReady, setPuterReady] = useState(false);
+  const [authStatus, setAuthStatus] = useState('checking');
   const [extractedFiles, setExtractedFiles] = useState([]);
   const [saveStatus, setSaveStatus] = useState({});
   const [attachedFile, setAttachedFile] = useState(null); // { name, content }
@@ -192,12 +193,97 @@ export default function App() {
   useEffect(() => { chatEndRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages]);
   useEffect(() => { loadWorkspaceInfo(); }, []);
 
+  // ── Puter.js SDK initialization ────────────────────────────────────────────
   useEffect(() => {
-    const check = setInterval(() => {
-      if (window.puter?.ai) { setPuterReady(true); clearInterval(check); }
+    let attempts = 0;
+    const maxAttempts = 30; // 6 seconds total
+    
+    const check = setInterval(async () => {
+      attempts++;
+      
+      if (attempts > maxAttempts) {
+        clearInterval(check);
+        setAuthStatus('error');
+        toast('Failed to load Puter.js SDK. Check internet connection.', 'error');
+        return;
+      }
+      
+      if (!window.puter?.ai) return;
+      
+      clearInterval(check);
+      
+      try {
+        const signedIn = await window.puter.auth.isSignedIn();
+        if (signedIn) {
+          setPuterReady(true);
+          setAuthStatus('signedin');
+          console.log('✓ Puter.js authenticated');
+        } else {
+          // AUTO-TRIGGER SIGN-IN on first load to avoid silent hang
+          setAuthStatus('signedout');
+          console.log('! Puter.js loaded but not signed in — auto-triggering sign-in');
+          
+          // Small delay to ensure UI is ready
+          setTimeout(async () => {
+            try {
+              await window.puter.auth.signIn();
+              const isNowSignedIn = await window.puter.auth.isSignedIn();
+              if (isNowSignedIn) {
+                setPuterReady(true);
+                setAuthStatus('signedin');
+                toast('✓ Signed in to Puter — AI ready!', 'success');
+                console.log('✓ Auto sign-in successful');
+              } else {
+                setAuthStatus('signedout');
+                toast('Sign-in required. Click "Sign In to Puter" below.', 'info');
+              }
+            } catch (err) {
+              console.log('Auto sign-in cancelled or failed:', err);
+              setAuthStatus('signedout');
+              toast('Please sign in to use AI features', 'info');
+            }
+          }, 500);
+        }
+      } catch (err) {
+        console.error('Puter auth check failed:', err);
+        setAuthStatus('signedout');
+      }
     }, 200);
+    
     return () => clearInterval(check);
   }, []);
+
+  const handleSignIn = async () => {
+    try {
+      if (!window.puter?.auth) {
+        toast('Puter.js SDK not loaded yet. Wait a moment and try again.', 'error');
+        return;
+      }
+      
+      toast('Opening Puter sign-in...', 'info');
+      await window.puter.auth.signIn();
+      
+      // Verify authentication
+      const isSignedIn = await window.puter.auth.isSignedIn();
+      if (isSignedIn) {
+        setPuterReady(true);
+        setAuthStatus('signedin');
+        toast('✓ Signed in successfully — AI ready!', 'success');
+        console.log('✓ Puter authentication successful');
+      } else {
+        throw new Error('Sign-in did not complete');
+      }
+    } catch (err) {
+      console.error('Sign-in error:', err);
+      const message = err?.message || String(err);
+      if (message.includes('cancel')) {
+        toast('Sign-in cancelled', 'info');
+      } else {
+        toast(`Sign-in failed: ${message}`, 'error');
+      }
+      setAuthStatus('signedout');
+    }
+  };
 
   useEffect(() => {
     if (activeFile && workspacePath) { loadFileContent(activeFile); setIsEditorDirty(false); }
@@ -388,31 +474,87 @@ export default function App() {
     }
 
     try {
-      let attempts = 0;
-      while ((!window.puter || !window.puter.ai) && attempts < 50) { await new Promise(r => setTimeout(r, 100)); attempts++; }
-      if (!window.puter?.ai) throw new Error('Puter.js SDK not available. Check internet connection.');
-
-      const response = await window.puter.ai.chat(
-        [{ role: 'system', content: systemPrompt }, { role: 'user', content: userText }],
-        { model: selectedModel, stream: true }
-      );
-
-      let accumulated = '';
-      for await (const part of response) {
-        if (abortRef.current) break;
-        accumulated += part?.text ?? '';
-        setMessages(prev => { const u = [...prev]; u[u.length - 1] = { sender: 'assistant', text: accumulated }; return u; });
+      // Validate Puter.js
+      if (!window.puter?.ai) {
+        throw new Error('Puter.js SDK not loaded. Check your internet connection and reload the app.');
+      }
+      
+      // Check authentication
+      if (authStatus !== 'signedin') {
+        setMessages(prev => { const u = [...prev]; u[u.length - 1] = { sender: 'assistant', text: '🔐 Not signed in. Click the status indicator at the bottom left to sign in to Puter.' }; return u; });
+        setIsGenerating(false);
+        toast('Please sign in to use AI features', 'error');
+        return;
       }
 
-      if (!accumulated.trim()) throw new Error('Empty response. Try a different model or rephrase.');
+      console.log(`Sending to model: ${selectedModel}`);
+      
+      const fullPrompt = `${systemPrompt}\n\nUser Request: ${userText}`;
+      
+      // Make AI request with proper error handling
+      const response = await window.puter.ai.chat(fullPrompt, { 
+        model: selectedModel, 
+        stream: true 
+      });
+
+      let accumulated = '';
+      let chunkCount = 0;
+      
+      for await (const part of response) {
+        if (abortRef.current) {
+          console.log('Generation aborted by user');
+          break;
+        }
+        
+        const text = part?.text ?? '';
+        accumulated += text;
+        chunkCount++;
+        
+        // Update UI every chunk
+        setMessages(prev => { 
+          const u = [...prev]; 
+          u[u.length - 1] = { sender: 'assistant', text: accumulated }; 
+          return u; 
+        });
+      }
+      
+      console.log(`✓ Received ${chunkCount} chunks, ${accumulated.length} characters`);
+
+      if (!accumulated.trim()) {
+        throw new Error('AI returned empty response. Try a different model or rephrase your request.');
+      }
+      
       const files = parseGeneratedFiles(accumulated);
       setExtractedFiles(files);
-      if (files.length > 0) toast(`${files.length} file(s) ready to save`, 'info');
+      if (files.length > 0) {
+        toast(`✓ Generated ${files.length} file(s)`, 'success');
+      }
     } catch (err) {
+      console.error('AI generation error:', err);
       const msg = err?.message || String(err);
-      setMessages(prev => { const u = [...prev]; u[u.length - 1] = { sender: 'assistant', text: `❌ ${msg}` }; return u; });
+      
+      // Provide helpful error messages
+      let userMsg = msg;
+      if (msg.includes('rate limit')) {
+        userMsg = '⏱️ Rate limit reached. Wait a moment and try again.';
+      } else if (msg.includes('network') || msg.includes('fetch')) {
+        userMsg = '🌐 Network error. Check your internet connection.';
+      } else if (msg.includes('model')) {
+        userMsg = `❌ Model error: ${msg}\n\nTry selecting a different model from the dropdown.`;
+      } else {
+        userMsg = `❌ ${msg}`;
+      }
+      
+      setMessages(prev => { 
+        const u = [...prev]; 
+        u[u.length - 1] = { sender: 'assistant', text: userMsg }; 
+        return u; 
+      });
       toast(msg, 'error');
-    } finally { setIsGenerating(false); abortRef.current = false; }
+    } finally { 
+      setIsGenerating(false); 
+      abortRef.current = false; 
+    }
   };
 
   const handleSaveToDisk = async (file) => {
@@ -581,8 +723,32 @@ export default function App() {
         </div>
 
         <div className="sidebar-footer">
-          <div className="status-indicator" />
-          <div className="status-text">{puterReady ? 'AI Ready' : 'Connecting…'}</div>
+          {authStatus === 'checking' && (
+            <>
+              <RefreshCw size={12} style={{ animation: 'spin 1.5s linear infinite', color: 'var(--color-secondary)' }} />
+              <div className="status-text">Loading AI...</div>
+            </>
+          )}
+          {authStatus === 'signedout' && (
+            <>
+              <button className="sidebar-signin-btn" onClick={handleSignIn} title="Sign in to enable AI">
+                <BrainCircuit size={14} />
+                <span>Sign In to Puter</span>
+              </button>
+            </>
+          )}
+          {authStatus === 'signedin' && (
+            <>
+              <div className="status-indicator" />
+              <div className="status-text">AI Ready</div>
+            </>
+          )}
+          {authStatus === 'error' && (
+            <>
+              <X size={12} style={{ color: 'var(--color-danger)' }} />
+              <div className="status-text" style={{ color: 'var(--color-danger)' }}>SDK Error</div>
+            </>
+          )}
         </div>
       </aside>
 
@@ -628,24 +794,19 @@ export default function App() {
                 <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
                   <BrainCircuit size={13} style={{ color: 'var(--color-secondary)', flexShrink: 0 }} />
                   <select value={selectedModel} onChange={e => setSelectedModel(e.target.value)} className="model-select">
-                    <optgroup label="OpenAI">
-                      <option value="gpt-4o-mini">gpt-4o-mini · Fast</option>
-                      <option value="gpt-4o">gpt-4o · Smart</option>
-                      <option value="gpt-4.1-mini">gpt-4.1-mini</option>
-                      <option value="gpt-4.1">gpt-4.1</option>
+                    <optgroup label="Claude (Anthropic)">
+                      <option value="claude-3-5-sonnet-20241022">Claude 3.5 Sonnet · Best</option>
+                      <option value="claude-3-opus-20240229">Claude 3 Opus · Powerful</option>
+                      <option value="claude-3-haiku-20240307">Claude 3 Haiku · Fast</option>
                     </optgroup>
-                    <optgroup label="Claude">
-                      <option value="claude-fable-5">claude-fable-5 · Best</option>
-                      <option value="claude-opus-4-8">claude-opus-4-8 · Powerful</option>
-                      <option value="claude-opus-4.8-fast">claude-opus-4.8-fast</option>
-                      <option value="claude-opus-4-7">claude-opus-4-7</option>
-                      <option value="claude-sonnet-4-6">claude-sonnet-4-6 · Default</option>
-                      <option value="claude-sonnet-4">claude-sonnet-4</option>
-                      <option value="claude-haiku-4-5">claude-haiku-4-5 · Fast</option>
+                    <optgroup label="OpenAI">
+                      <option value="gpt-4o">GPT-4o · Smart</option>
+                      <option value="gpt-4o-mini">GPT-4o Mini · Fast</option>
+                      <option value="gpt-4-turbo-preview">GPT-4 Turbo</option>
                     </optgroup>
                     <optgroup label="Meta Llama">
                       <option value="meta-llama/Meta-Llama-3.1-70B-Instruct-Turbo">Llama 3.1 70B</option>
-                      <option value="meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo">Llama 3.1 8B</option>
+                      <option value="meta-llama/Meta-Llama-3.1-8B-Instruct-Turbo">Llama 3.1 8B · Fast</option>
                     </optgroup>
                   </select>
                   <button className="icon-btn" onClick={() => setShowSystemPrompt(v => !v)} title="System prompt" style={showSystemPrompt ? { borderColor: 'rgba(168,85,247,0.4)', color: 'var(--color-primary)' } : {}}>

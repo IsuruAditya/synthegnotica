@@ -231,6 +231,30 @@ h1,h2,h3,h4,h5,h6 {
   border-top: 1px solid var(--color-border);
 }
 
+.sidebar-signin-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  padding: 8px 12px;
+  background: var(--grad-primary);
+  border: none;
+  border-radius: 6px;
+  color: white;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: var(--t-fast);
+  box-shadow: var(--shadow-glow);
+}
+.sidebar-signin-btn:hover {
+  filter: brightness(1.1);
+  transform: translateY(-1px);
+  box-shadow: 0 0 20px rgba(168,85,247,0.4);
+}
+
 .status-indicator {
   width: 7px;
   height: 7px;

@@ -42,7 +42,7 @@ Everything runs **free** — no API key, no Anthropic/OpenAI account, no billing
 
 | Feature | Description |
 |---------|-------------|
-| 🤖 Free AI | Claude Fable 5, Opus 4.8, Sonnet 4.6, GPT-4.1, Llama 3.1 — all free via Puter.js |
+| 🤖 Free AI | Claude 3.5 Sonnet, Opus, GPT-4o, Llama 3.1 — free via Puter.js |
 | 💬 Multi-session Chat | Create, switch, and delete named chat sessions with persistent history |
 | 🛑 Stop Generation | Cancel AI generation mid-stream at any time |
 | 📎 Attach File | Send the active editor file as context directly into your chat message |
@@ -115,13 +115,15 @@ synthegnotica/
 
 ---
 
-## AI Models (All Free via Puter.js)
+## AI Models (Free via Puter.js)
 
 | Provider | Models |
 |----------|--------|
-| Anthropic | `claude-fable-5`, `claude-opus-4-8`, `claude-opus-4.8-fast`, `claude-opus-4-7`, `claude-sonnet-4-6`, `claude-sonnet-4`, `claude-haiku-4-5` |
-| OpenAI | `gpt-4o`, `gpt-4o-mini`, `gpt-4.1`, `gpt-4.1-mini` |
+| Anthropic | `claude-3-5-sonnet`, `claude-3-opus`, `claude-3-haiku` |
+| OpenAI | `gpt-4o`, `gpt-4o-mini`, `gpt-4-turbo` |
 | Meta | `Llama 3.1 70B`, `Llama 3.1 8B` |
+
+**Note:** Model availability subject to Puter.js free tier terms.
 
 ---
 
@@ -141,6 +143,47 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 1. Fork → branch → commit → PR against `main`
 2. Run `npm run build` and `cargo check` before submitting
+
+---
+
+## License & Usage Rights
+
+### ✅ Synthegnotica IDE
+
+**MIT License** — completely free and open source:
+- ✅ Use for personal or commercial projects
+- ✅ Modify and redistribute
+- ✅ Create and sell applications built with Synthegnotica
+- ✅ No attribution required (but appreciated!)
+- ✅ No cost, ever
+
+See [LICENSE](LICENSE) for full terms.
+
+### ⚠️ AI Service Provider
+
+**Puter.js** provides the AI features:
+- ✅ Free tier for all users
+- ✅ No API keys or payment required from you or your users
+- ⚠️ Requires free [Puter.com](https://puter.com) account sign-up
+- ⚠️ Subject to Puter's [Terms of Service](https://puter.com/terms)
+- ⚠️ Rate limits apply (generous for normal use)
+- ⚠️ Internet connection required for AI features
+
+**Important:** Synthegnotica is an independent project and not affiliated with or endorsed by Puter.
+
+### 📝 Commercial Use
+
+**YES** - you can:
+- ✅ Build commercial applications using Synthegnotica
+- ✅ Use AI-generated code in commercial projects
+- ✅ Sell applications you create
+- ✅ Offer Synthegnotica to your team/company
+- ✅ Fork and create your own version
+
+**NO** - you cannot:
+- ❌ Remove or modify the MIT license notice
+- ❌ Claim you created Synthegnotica
+- ❌ Hold the authors liable for any damages
 
 ---
 
